@@ -23,6 +23,11 @@ import hashlib
 import logging
 
 import pandas as pd
+import numpy as np
+
+from plotnine import *
+from plotnine.data import *
+
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
@@ -315,16 +320,38 @@ def processSamples():
              
              
     # format the filtered predictions for network analysis    
+    
+    # 1. number of target events / miRNA / 3'UTR
+    # Gene name has five parts: ENSG00000106331|ENST00000338516|PAX4|127610811|127610845
+    #   Keep ENSG ID and Common Name
+    # miRNA has four parts:     hsa-miR-548t-3p_MIMAT0022730_homo_sapiens_miR-548t-3p
+    #   keep Common Name and MIMAT id
     allPreds['shortGeneName']=allPreds['GeneName'].str.split("|").str[0] + "|" + allPreds['GeneName'].str.split("|").str[2]
     allPreds['shortmiRName']=allPreds['miRNA'].str.split("_").str[0]+ "|" + allPreds['miRNA'].str.split("_").str[1]    
     groupedAllPreds = allPreds.groupby(['shortGeneName','shortmiRName']).size().reset_index().rename(columns={0:'count'})
     outputFileGrpAllPreds = os.path.splitext(resultfiles)[0] + "_allfilteredGrouped.tsv" 
     groupedAllPreds.to_csv(outputFileGrpAllPreds, sep='\t')
     
-    # Gene name has five parts: ENSG00000106331|ENST00000338516|PAX4|127610811|127610845
-    #   Keep ENSG ID and Common Name
-    # miRNA has four parts:     hsa-miR-548t-3p_MIMAT0022730_homo_sapiens_miR-548t-3p
-    #   keep Common Name and MIMAT id
+    
+    # 2. number of targeted 3'UTRs / miRNA
+    countsByMiRNAs = groupedAllPreds['shortmiRName'].value_counts()
+    dfCounts = pd.DataFrame(countsByMiRNAs)
+    dfCounts.columns=['counts']
+    outputFileCountsByMiRNAs = os.path.splitext(resultfiles)[0] + "_countsByMiRNAs.tsv" 
+    
+    plotHistogramFileCountsByMiRNAs = os.path.splitext(resultfiles)[0] + "_countsByMiRNAs.png"
+    countsByMiRNAs.to_csv(outputFileCountsByMiRNAs, sep='\t')
+    p = ggplot(dfCounts, aes(x='counts')) + geom_histogram(binwidth=1, color="black", fill="white")    
+    p.save(filename = plotHistogramFileCountsByMiRNAs, height=5, width=5, units = 'in', dpi=1000)    
+    
+    # 3. number of miRNAs / 3'UTR
+    countsBy3pUTRs = groupedAllPreds['shortGeneName'].value_counts()
+    outputFileCountsBy3pUTRs = os.path.splitext(resultfiles)[0] + "_countsBy3pUTRs.tsv" 
+    countsBy3pUTRs.to_csv(outputFileCountsBy3pUTRs, sep='\t')
+    
+    
+    
+    
     
     
 
