@@ -339,8 +339,17 @@ def processSamples():
     dfCounts.columns=['counts']
     outputFileCountsByMiRNAs = os.path.splitext(resultfiles)[0] + "_countsByMiRNAs.tsv" 
     
+    count, division = np.histogram(countsByMiRNAs, bins=list(range(0, max(countsByMiRNAs)+2)))
+    
     plotHistogramFileCountsByMiRNAs = os.path.splitext(resultfiles)[0] + "_countsByMiRNAs.png"
     countsByMiRNAs.to_csv(outputFileCountsByMiRNAs, sep='\t')
+
+    dataHistogramFileCountsByMiRNAs = os.path.splitext(resultfiles)[0] + "_histByMiRNAs.tsv"
+    dfHistmiR = pd.DataFrame([division, count]).T
+    dfHistmiR.columns=['bin', 'count']
+    dfHistmiR.replace(np.nan, 0)
+    dfHistmiR.to_csv(dataHistogramFileCountsByMiRNAs, sep='\t')
+
     p = ggplot(dfCounts, aes(x='counts')) + geom_histogram(binwidth=1, color="black", fill="white")    
     p.save(filename = plotHistogramFileCountsByMiRNAs, height=5, width=5, units = 'in', dpi=1000)    
     
