@@ -14,9 +14,7 @@
 '''
 
 import sys
-import csv
 import os
-from pathlib import Path
 
 from datetime import datetime
 import hashlib
@@ -24,6 +22,9 @@ import logging
 
 import pandas as pd
 import numpy as np
+from matplotlib import pyplot
+from matplotlib import cm
+
 
 from plotnine import *
 from plotnine.data import *
@@ -31,7 +32,7 @@ from plotnine.data import *
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
-from Bio.Data.CodonTable import list_possible_proteins
+
 
 
 __all__ = []
@@ -241,78 +242,109 @@ def loadGroupPredictionData():
 def mergeMiRNAData():
     #result = pd.merge(left, right, on=["key1", "key2"])
     global dfFullMiRInfo
-    dfFullMiRInfo = pd.merge(grpPredData, miRBaseFeatureList, on=["MIMATID", "MIMATID"])
 
+    uniqueMiRList = grpPredData["MIMATID"].unique()
+    dfUniqMiRList = pd.DataFrame(uniqueMiRList)
+    dfUniqMiRList.columns=["MIMATID"]
+    dfFullMiRInfo = pd.merge(dfUniqMiRList, miRBaseFeatureList, how="inner", on=["MIMATID", "MIMATID"])
+    print(str(len(dfFullMiRInfo)))
+    print("done")
+
+    
 
     
 def processSamples():
-    # read target list
-    # loop through target list
+
+
     global targetFiles
-    global allPreds
+    global dmrHits
+    allDMRHits=[]
+    # loop through miRNAs in grpPredData list and see if they have an upstream DMR within featuredistance nts
+    uniqueMiRList = dfFullMiRInfo["MIMATID"].unique()
+    for index, miR in dfFullMiRInfo.iterrows():        
+        dmrHits = dfDMRFeatureList.loc[(dfDMRFeatureList['Chr'] == miR['chr']) 
+                                       & (dfDMRFeatureList['End position']-miR['featureStart'] <= int(featureDistance))
+                                       & (dfDMRFeatureList['End position']-miR['featureStart'] >= 0)]
+        #dmrHits['featureDist']=dmrHits['End position']-miR['featureStart'] 
+        if len(dmrHits) > 0:
+            
+            #print(miR['MIMATID'] + "|" + str(len(dmrHits)))
+            allDMRHits.append({"MIMATID":miR['MIMATID'], "number_of_hits":len(dmrHits), "distance":min(dmrHits['End position'])-miR['featureStart']})
     
-    allPreds = pd.DataFrame()    
+
+    dfDMRHits = pd.DataFrame(allDMRHits)
+    logging.info("found <" + str(len(dfDMRHits["MIMATID"].unique())) + "> miRNAs")
+    logging.info("and <" + str(len(dfDMRHits["MIMATID"])) + "> DMR miRNA events")
+
+    outputFiledfDMRHitss = os.path.splitext(groupedpredsFile)[0] + "_dmrHits.tsv" 
+    dfDMRHits.to_csv(outputFiledfDMRHitss, sep='\t')
+
+    # project the DMR perturbations on to the input prediction set
+    # generate new list with the miRNAs in the dfDMRHits removed
+    logging.info("summarizing DMR data")
     
-    logging.info("processing target file")
+    grpPredData['DMRcount']=0
+    grpPredData['DMRdist']=0    
+    for index, dmrMiR in dfDMRHits.iterrows():
+        #print(dmrMiR)
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'DMRcount']=dmrMiR['number_of_hits']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'DMRdist']=dmrMiR['distance']
+
+    outputFileallfilteredGroupedDMRmod = os.path.splitext(groupedpredsFile)[0] + "_allfilteredGroupedDMRmod.tsv" 
+    grpPredData.to_csv(outputFileallfilteredGroupedDMRmod, sep='\t')
+   
+    
+    # 1. number of targeted 3'UTRs / miRNA
+    countsByMiRNAsNoDMR = grpPredData['shortmiRName'].value_counts()
+    dfCountsNoDMR = pd.DataFrame(countsByMiRNAsNoDMR)
+    dfCountsNoDMR.columns=['counts']
+    outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsNoDMR.tsv"     
+    countNoDMR, division = np.histogram(countsByMiRNAsNoDMR, bins=list(range(0, max(countsByMiRNAsNoDMR)+2)))    
+    countsByMiRNAsNoDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
+
+    countsByMiRNAsDMR = grpPredData.loc[grpPredData['DMRcount']==0]['shortmiRName'].value_counts()
+    dfCountsDMR = pd.DataFrame(countsByMiRNAsDMR)
+    dfCountsDMR.columns=['counts']
+    outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMR.tsv"     
+    countDMR, division = np.histogram(countsByMiRNAsDMR, bins=list(range(0, max(countsByMiRNAsNoDMR)+2)))    
+    countsByMiRNAsDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
+
+    dfHistCounts = pd.DataFrame(division[:-1])
+    dfHistCounts["Counts - no DMR"] = countNoDMR.tolist()
+    dfHistCounts["Counts - DMR"] = countDMR.tolist()
+    
+    dfHistCounts.columns=["no of 3UTR targets", "no DMR", "DMR"]
+    dfHistCounts.to_csv(os.path.splitext(groupedpredsFile)[0] + "_HistDMRNoDMR.tsv")
+    statsFile = os.path.splitext(groupedpredsFile)[0] + "_statsDMRNoDMR.tsv"
+    with open(statsFile, 'w') as fStats:
+        fStats.write("no DMR: total targeting events" + "\t" + str(countsByMiRNAsNoDMR.sum()) + "\n")
+        fStats.write("      : median" + "\t" + str(countsByMiRNAsNoDMR.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(countsByMiRNAsNoDMR.mean()) + "\n")
+        fStats.write("   DMR: total targeting events" + "\t" + str(countsByMiRNAsDMR.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(countsByMiRNAsDMR.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(countsByMiRNAsDMR.mean()) + "\n")
+
+    plotHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMRmod.png"
+    bins=list(range(0, max(countsByMiRNAsNoDMR)+2))
+
+    pyplot.hist(countsByMiRNAsNoDMR, bins, alpha=0.5, label='noDMR', color='cornflowerblue', edgecolor="navy")
+    pyplot.hist(countsByMiRNAsDMR, bins, alpha=0.5, label='DMR', color='plum', edgecolor="slateblue")
+    pyplot.xlabel("no of targets")
+    pyplot.ylabel("no of miRNAs")
+    pyplot.title("connectivity DMR vs no DMR")
+    pyplot.legend(loc='upper right')
+    pyplot.savefig(plotHistogramFileCountsByMiRNAs)
+    
+      
+    
+    # 2. number of miRNAs / 3'UTR
+    #countsBy3pUTRsNoDMR = grpPredData['shortGeneName'].value_counts()
+    countsBy3pUTRDMR = grpPredData.loc[grpPredData['DMRcount']==0]['shortmiRName'].value_counts()
+    outputFileCountsBy3pUTRs = os.path.splitext(groupedpredsFile)[0] + "_countsBy3pUTRsDMRmod.tsv" 
+    countsBy3pUTRDMR.to_csv(outputFileCountsBy3pUTRs, sep='\t')
+
+
              
-             
-    # format the filtered predictions for network analysis    
-    
-    # 1. number of target events / miRNA / 3'UTR
-    # Gene name has five parts: ENSG00000106331|ENST00000338516|PAX4|127610811|127610845
-    #   Keep ENSG ID and Common Name
-    # miRNA has four parts:     hsa-miR-548t-3p_MIMAT0022730_homo_sapiens_miR-548t-3p
-    #   keep Common Name and MIMAT id
-    allPreds['shortGeneName']=allPreds['GeneName'].str.split("|").str[0] + "|" + allPreds['GeneName'].str.split("|").str[2]
-    allPreds['shortmiRName']=allPreds['miRNA'].str.split("_").str[0]+ "|" + allPreds['miRNA'].str.split("_").str[1]    
-    groupedAllPreds = allPreds.groupby(['shortGeneName','shortmiRName']).size().reset_index().rename(columns={0:'count'})
-    outputFileGrpAllPreds = os.path.splitext(groupedpredsFile)[0] + "_allfilteredGrouped.tsv" 
-    groupedAllPreds.to_csv(outputFileGrpAllPreds, sep='\t')
-    
-    
-    # 2. number of targeted 3'UTRs / miRNA
-    countsByMiRNAs = groupedAllPreds['shortmiRName'].value_counts()
-    dfCounts = pd.DataFrame(countsByMiRNAs)
-    dfCounts.columns=['counts']
-    outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAs.tsv" 
-    
-    count, division = np.histogram(countsByMiRNAs, bins=list(range(0, max(countsByMiRNAs)+2)))
-    
-    plotHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAs.png"
-    countsByMiRNAs.to_csv(outputFileCountsByMiRNAs, sep='\t')
-
-    dataHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_histByMiRNAs.tsv"
-    dfHistmiR = pd.DataFrame([division, count]).T
-    dfHistmiR.columns=['bin', 'count']
-    dfHistmiR.replace(np.nan, 0)
-    dfHistmiR.to_csv(dataHistogramFileCountsByMiRNAs, sep='\t')
-
-    p = ggplot(dfCounts, aes(x='counts')) + geom_histogram(binwidth=1, color="black", fill="white")    
-    p.save(filename = plotHistogramFileCountsByMiRNAs, height=5, width=5, units = 'in', dpi=1000)    
-    
-    # 3. number of miRNAs / 3'UTR
-    countsBy3pUTRs = groupedAllPreds['shortGeneName'].value_counts()
-    outputFileCountsBy3pUTRs = os.path.splitext(groupedpredsFile)[0] + "_countsBy3pUTRs.tsv" 
-    countsBy3pUTRs.to_csv(outputFileCountsBy3pUTRs, sep='\t')
-    
-    
-    
-    
-    
-    
-
-             
-def processPredictionFile(predFile, miRName):
-    global allPreds
-    # grab miRNA name from parent folder name
-
-    # read target predictions and filter by probability and energy
-
-    
-    logging.info("done")
-          
-    
-    
 def printLongHelpAndExit():
     logging.info("+" + "-" * 78 + "+")
     logging.info("+                                                                              +")
