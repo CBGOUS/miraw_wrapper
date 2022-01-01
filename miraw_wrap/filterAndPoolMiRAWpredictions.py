@@ -298,7 +298,7 @@ def loadGroupPredictionData():
     logging.info("found <" + str(len(miRNAs))  + "> samples")
         
 
-def processSamples():
+def processSamplesByDMR():
     # read target list
     # loop through target list
     global targetFiles
@@ -461,7 +461,7 @@ def main(argv=None): # IGNORE:C0111
     loadGroupPredictionData()
     loadFeatureList()
     mergeMiRNAData()
-    processSamples()
+    processSamplesByDMR()
     
 
     logging.info("finished")
