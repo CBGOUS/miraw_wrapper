@@ -231,14 +231,13 @@ def loadMiRBaseFeatureList():
     miRBaseMiRFeatureList = pd.read_csv(miRBaseGFF3File, sep="\t", skiprows=14)
     miRBaseMiRFeatureList.columns = ["chr", "col2", "featureType", "featureStart", 
                                   "featureStop", "col6", "strand", "col8", "Attributes"]
+    miRBasePreMiRFeatureList=miRBaseMiRFeatureList[miRBaseMiRFeatureList['featureType'] == "miRNA_primary_transcript"]
+    miRBasePreMiRFeatureList["MIID"]=miRBaseMiRFeatureList["Attributes"].str.split(";").str[0].str.split("=").str[1]
+
+    # we need the MIID to match the SNV information in 'mergeMiRNAData'
     miRBaseMiRFeatureList=miRBaseMiRFeatureList[miRBaseMiRFeatureList['featureType'] == "miRNA"]
     miRBaseMiRFeatureList["MIMATID"]=miRBaseMiRFeatureList["Attributes"].str.split(";").str[0].str.split("=").str[1]
-    
-    miRBasePreMiRFeatureList=miRBaseMiRFeatureList[miRBaseMiRFeatureList['featureType'] == "miRNA"]
-    miRBasePreMiRFeatureList["MIID"]=miRBaseMiRFeatureList["Attributes"].str.split(";").str[0].str.split("=").str[1]
-    
-    
-
+    miRBaseMiRFeatureList["MIID"]=miRBaseMiRFeatureList["Attributes"].str.split(";").str[3].str.split("=").str[1]
     
 
     logging.info("read <" + str(len(miRBaseMiRFeatureList)) + "> miRNA features")
@@ -293,22 +292,33 @@ def loadmiRNASNVData():
     
 def mergeMiRNAData():
 
-    global dfFullMiRInfo
+    global dfMiRsPredsPlusPos
     global dfFullPlusSNVs
+    global dfFullMiRInfo
 
     # 1. merge the miRBase GFF file with the list of miRNAs present in the prediction list so we have
     #    have data frame with a list of all miRNAs present in the prediction list and their genome coordinates   
     uniqueMiRList = grpPredData["MIMATID"].unique()
     dfUniqMiRList = pd.DataFrame(uniqueMiRList)
     dfUniqMiRList.columns=["MIMATID"]
-    dfFullMiRInfo = pd.merge(dfUniqMiRList, miRBaseMiRFeatureList, how="inner", on=["MIMATID", "MIMATID"])
-    logging.info("found <" + str(len(dfFullMiRInfo)) + "> unique miRNAs in the prediction list")
+    dfMiRsPredsPlusPos = pd.merge(dfUniqMiRList, miRBaseMiRFeatureList, how="inner", on=["MIMATID", "MIMATID"])
+    logging.info("found <" + str(len(dfMiRsPredsPlusPos)) + "> unique miRNAs in the prediction list")
     logging.info("done")
     
-    # 2. merge with the miRNA SNV list to incorporate the SNV information.
+    # 2. merge the pre-miRNA SNV information and the miRBase genome position information.
     #    Because ENSEMBL doesn't include the miRBase MIMAT/MI reference IDs, it seems the only way to join
-    #    is by matching the start positions in both dataframes
-    dfFullPlusSNVs = pd.merge(dfFullMiRInfo, dfmiRNASNVData, how="inner", on=["featureStart", "featureStart"])
+    #    is by first matching the start positions in both dataframes to get the position / SNV information at the
+    #    pre-miRNA level
+    
+    dfPreMiRPosPlusSNVs = pd.merge(miRBasePreMiRFeatureList, dfmiRNASNVData, how="inner", on=["featureStart", "featureStart"])
+    dfFullMiRInfo = pd.merge(dfPreMiRPosPlusSNVs, dfMiRsPredsPlusPos, how="inner", on=["MIID", "MIID"])
+    
+    # 3. merge the SNV information to the miRNAs by matching the MIID columns 
+    
+    # from this dataframe, i can use the 
+    uniqueFullMiRList = dfFullMiRInfo["MIMATID"].unique()
+    logging.info("after merging, we have  <" + str(len(uniqueFullMiRList)) + "> unique miRNAs in the prediction list")
+    logging.info("done")
     
     # this information still needs to be merged into the grpPredData dataframe
     
@@ -341,17 +351,17 @@ def processSamplesByDMR():
     # (we have the coordinates through the mergeMiRNAData method)
     # 
     #uniqueMiRList = dfFullMiRInfo["MIMATID"].unique()
-    for index, miR in dfFullPlusSNVs.iterrows():        
-        dmrHits = dfDMRFeatureList.loc[(dfDMRFeatureList['Chr'] == miR['chr']) 
-                                       & (dfDMRFeatureList['End position']-miR['featureStart'] <= int(featureDistance))
-                                       & (dfDMRFeatureList['End position']-miR['featureStart'] >= 0)]
+    for index, miR in dfFullMiRInfo.iterrows():        
+        dmrHits = dfDMRFeatureList.loc[(dfDMRFeatureList['Chr'] == miR['chr_x']) 
+                                       & (dfDMRFeatureList['End position']-miR['featureStart_x'] <= int(featureDistance))
+                                       & (dfDMRFeatureList['End position']-miR['featureStart_x'] >= 0)]
         #dmrHits['featureDist']=dmrHits['End position']-miR['featureStart'] 
         if len(dmrHits) > 0:
             
-            #print(miR['MIMATID'] + "|" + str(len(dmrHits)))
+            print(miR['MIMATID'] + "|" + str(len(dmrHits)))
             allDMRHits.append({"MIMATID":miR['MIMATID'], 
                                "number_of_hits":len(dmrHits), 
-                               "distance":min(dmrHits['End position'])-miR['featureStart'],
+                               "distance":min(dmrHits['End position'])-miR['featureStart_x'],
                                "EUR":miR['EUR'],
                                "EAS":miR['EAS'],
                                "AMR":miR['AMR'],
@@ -371,7 +381,7 @@ def processSamplesByDMR():
     dfDMRHits.to_csv(outputFiledfDMRHitss, sep='\t')
 
     # project the DMR perturbations on to the input prediction set
-    # generate new list with the miRNAs in the dfDMRHits removed
+    # and generate a new list with the miRNAs in the dfDMRHits removed
     logging.info("summarizing DMR data")
     
     grpPredData['DMRcount']=0
@@ -412,17 +422,27 @@ def processSamplesByDMR():
     countsByMiRNAsNoDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
 
     countsByMiRNAsDMR = grpPredData.loc[grpPredData['DMRcount']==0]['shortmiRName'].value_counts()
+    
     dfCountsDMR = pd.DataFrame(countsByMiRNAsDMR)
     dfCountsDMR.columns=['counts']
     outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMR.tsv"     
     countDMR, division = np.histogram(countsByMiRNAsDMR, bins=list(range(0, max(countsByMiRNAsNoDMR)+2)))    
     countsByMiRNAsDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
 
+    countsByMiRNAsAFRSNVs = grpPredData.loc[grpPredData['AFR']==0]['shortmiRName'].value_counts()
+    dfCountsAFRSNVs = pd.DataFrame(countsByMiRNAsAFRSNVs)
+    dfCountsAFRSNVs.columns=['counts']
+    outputFileAFRSNVsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsAFRSNVs.tsv"     
+    countAFRSNVs, division = np.histogram(countsByMiRNAsAFRSNVs, bins=list(range(0, max(countsByMiRNAsAFRSNVs)+2)))    
+    countsByMiRNAsAFRSNVs.to_csv(outputFileAFRSNVsByMiRNAs, sep='\t')
+
+
     dfHistCounts = pd.DataFrame(division[:-1])
     dfHistCounts["Counts - no DMR"] = countNoDMR.tolist()
     dfHistCounts["Counts - DMR"] = countDMR.tolist()
+    dfHistCounts["Counts - AFR"] = countAFRSNVs.tolist()    
     
-    dfHistCounts.columns=["no of 3UTR targets", "no DMR", "DMR"]
+    dfHistCounts.columns=["no of 3UTR targets", "no DMR", "DMR", "AFRSNVs"]
     dfHistCounts.to_csv(os.path.splitext(groupedpredsFile)[0] + "_HistDMRNoDMR.tsv")
     statsFile = os.path.splitext(groupedpredsFile)[0] + "_statsDMRNoDMR.tsv"
     with open(statsFile, 'w') as fStats:
@@ -432,12 +452,15 @@ def processSamplesByDMR():
         fStats.write("   DMR: total targeting events" + "\t" + str(countsByMiRNAsDMR.sum()) + "\n")        
         fStats.write("      : median" + "\t" + str(countsByMiRNAsDMR.median()) + "\n")
         fStats.write("      : average" + "\t" + str(countsByMiRNAsDMR.mean()) + "\n")
-
+        fStats.write("   AFR: total targeting events" + "\t" + str(countsByMiRNAsAFRSNVs.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(countsByMiRNAsAFRSNVs.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(countsByMiRNAsAFRSNVs.mean()) + "\n")
     plotHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMRmod.png"
     bins=list(range(0, max(countsByMiRNAsNoDMR)+2))
 
-    pyplot.hist(countsByMiRNAsNoDMR, bins, alpha=0.5, label='noDMR', color='cornflowerblue', edgecolor="navy")
-    pyplot.hist(countsByMiRNAsDMR, bins, alpha=0.5, label='DMR', color='plum', edgecolor="slateblue")
+    pyplot.hist(countsByMiRNAsNoDMR, bins, alpha=0.3, label='noDMR', color='cornflowerblue', edgecolor="navy")
+    pyplot.hist(countsByMiRNAsDMR, bins, alpha=0.3, label='DMR', color='plum', edgecolor="slateblue")
+    pyplot.hist(countsByMiRNAsAFRSNVs, bins, alpha=0.3, label='AFR', color='green', edgecolor="mediumseagreen")
     pyplot.xlabel("no of targets")
     pyplot.ylabel("no of miRNAs")
     pyplot.title("connectivity DMR vs no DMR")
