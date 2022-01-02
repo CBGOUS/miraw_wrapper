@@ -346,6 +346,7 @@ def processSamplesByDMR():
     #global targetFiles
     #global dmrHits
     allDMRHits=[]
+    allSNVHits=[]
     # loop through miRNAs in grpPredData list and see if they have an upstream DMR within "featuredistance" nts
     # to do this, iterate through every miRNA present in the predicted target list
     # (we have the coordinates through the mergeMiRNAData method)
@@ -370,10 +371,31 @@ def processSamplesByDMR():
                                "SNVsPerNT":miR['SNVsPerNT'],
                                "SubPopsPerNT":miR['SubPopsPerNT'],
                                "SupPopsPerNT":miR['SupPopsPerNT']}                            
-)
+                               )
     
 
+
+        elif miR['AFR'] > 0:
+            
+            
+            print(miR['MIMATID'] + "|" + str(len(dmrHits)))
+            allSNVHits.append({"MIMATID":miR['MIMATID'], 
+                               "number_of_hits":0, 
+                               "distance":0,
+                               "EUR":miR['EUR'],
+                               "EAS":miR['EAS'],
+                               "AMR":miR['AMR'],
+                               "SAS":miR['SAS'],
+                               "AFR":miR['AFR'],
+                               "SNVsPerNT":miR['SNVsPerNT'],
+                               "SubPopsPerNT":miR['SubPopsPerNT'],
+                               "SupPopsPerNT":miR['SupPopsPerNT']}                            
+                               )
+    
+
+
     dfDMRHits = pd.DataFrame(allDMRHits)
+    dfSNVHits = pd.DataFrame(allSNVHits)
     logging.info("found <" + str(len(dfDMRHits["MIMATID"].unique())) + "> miRNAs")
     logging.info("and <" + str(len(dfDMRHits["MIMATID"])) + "> DMR miRNA events")
 
@@ -411,60 +433,106 @@ def processSamplesByDMR():
     outputFileallfilteredGroupedDMRmod = os.path.splitext(groupedpredsFile)[0] + "_allfilteredGroupedDMRmod.tsv" 
     grpPredData.to_csv(outputFileallfilteredGroupedDMRmod, sep='\t')
    
+    for index, snvMiR in dfSNVHits.iterrows():
+        #print(dmrMiR)
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRcount']=snvMiR['number_of_hits']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRdist']=snvMiR['distance']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'EUR']=snvMiR['EUR']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'EAS']=snvMiR['EAS']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'AMR']=snvMiR['AMR']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'SAS']=snvMiR['SAS']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'AFR']=snvMiR['AFR']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'SNVsPerNT']=snvMiR['SNVsPerNT']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'SubPopsPerNT']=snvMiR['SubPopsPerNT']
+        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'SupPopsPerNT']=snvMiR['SupPopsPerNT']
+                
+    outputFileallfilteredGroupedDMRmod = os.path.splitext(groupedpredsFile)[0] + "_allfilteredGroupedSNVmod.tsv" 
+    grpPredData.to_csv(outputFileallfilteredGroupedDMRmod, sep='\t')
     
     # 1. number of targeted 3'UTRs / miRNA
-    countsByMiRNAsNoDMR = grpPredData['shortmiRName'].value_counts()  # <-- this is DMRs / miRNA
+    countsByMiRNAsAll = grpPredData['shortmiRName'].value_counts()  # <-- this is DMRs / miRNA
     
-    dfCountsNoDMR = pd.DataFrame(countsByMiRNAsNoDMR)
+    dfCountsNoDMR = pd.DataFrame(countsByMiRNAsAll)
     dfCountsNoDMR.columns=['counts']
-    outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsNoDMR.tsv"     
-    countNoDMR, division = np.histogram(countsByMiRNAsNoDMR, bins=list(range(0, max(countsByMiRNAsNoDMR)+2)))    
-    countsByMiRNAsNoDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
+    outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsAll.tsv"     
+    countNoDMR, division = np.histogram(countsByMiRNAsAll, bins=list(range(0, max(countsByMiRNAsAll)+2)))    
+    countsByMiRNAsAll.to_csv(outputFileCountsByMiRNAs, sep='\t')
+    # no DMRs or SNVs
+    countsByMiRNAsNoPerturbs = grpPredData.loc[(grpPredData['DMRcount']==0) & (grpPredData['AFR']==0) ]['shortmiRName'].value_counts()
+    dfCountsNoPerturbs = pd.DataFrame(countsByMiRNAsNoPerturbs)
+    dfCountsNoPerturbs.columns=['counts']
 
-    countsByMiRNAsDMR = grpPredData.loc[grpPredData['DMRcount']==0]['shortmiRName'].value_counts()
-    
-    dfCountsDMR = pd.DataFrame(countsByMiRNAsDMR)
-    dfCountsDMR.columns=['counts']
+    # DMRs Only
+    countsByMiRNAsDMROnly  = grpPredData.loc[(grpPredData['DMRcount']!=0) & (grpPredData['AFR']==0) ]['shortmiRName'].value_counts()
+    dfCountsDMROnly = pd.DataFrame(countsByMiRNAsDMROnly)
+    dfCountsDMROnly.columns=['counts']
     outputFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMR.tsv"     
-    countDMR, division = np.histogram(countsByMiRNAsDMR, bins=list(range(0, max(countsByMiRNAsNoDMR)+2)))    
-    countsByMiRNAsDMR.to_csv(outputFileCountsByMiRNAs, sep='\t')
+    countDMROnly, division = np.histogram(countsByMiRNAsDMROnly, bins=list(range(0, max(countsByMiRNAsAll)+2)))    
+    countsByMiRNAsDMROnly.to_csv(outputFileCountsByMiRNAs, sep='\t')
 
+    # SNVs only
     countsByMiRNAsAFRSNVs = grpPredData.loc[grpPredData['AFR']==0]['shortmiRName'].value_counts()
+    countsByMiRNAsAFROnly  = grpPredData.loc[(grpPredData['DMRcount']==0) & (grpPredData['AFR']!=0) ]['shortmiRName'].value_counts()
+    dfCountsAFROnly = pd.DataFrame(countsByMiRNAsAFROnly)
+    dfCountsAFROnly.columns=['counts']    
+    
     dfCountsAFRSNVs = pd.DataFrame(countsByMiRNAsAFRSNVs)
     dfCountsAFRSNVs.columns=['counts']
     outputFileAFRSNVsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsAFRSNVs.tsv"     
-    countAFRSNVs, division = np.histogram(countsByMiRNAsAFRSNVs, bins=list(range(0, max(countsByMiRNAsAFRSNVs)+2)))    
-    countsByMiRNAsAFRSNVs.to_csv(outputFileAFRSNVsByMiRNAs, sep='\t')
-
-
+    countAFRSNVsOnly, division = np.histogram(countsByMiRNAsAFROnly, bins=list(range(0, max(countsByMiRNAsAFRSNVs)+2)))    
+    countsByMiRNAsAFROnly.to_csv(outputFileAFRSNVsByMiRNAs, sep='\t')
+    
+    # DMRs and SNVs
+    countsByMiRNAsDMRsAndSNVs  = grpPredData.loc[(grpPredData['DMRcount']!=0) & (grpPredData['AFR']!=0) ]['shortmiRName'].value_counts()
+    dfCountsDMRsAndSNVs = pd.DataFrame(countsByMiRNAsDMRsAndSNVs)
+    dfCountsDMRsAndSNVs.columns=['counts']
+    countDMRsAFRSNVsOnly, division = np.histogram(countsByMiRNAsDMRsAndSNVs, bins=list(range(0, max(countsByMiRNAsAFRSNVs)+2)))    
+    countsByMiRNAsAFROnly.to_csv(outputFileAFRSNVsByMiRNAs, sep='\t')
+    
     dfHistCounts = pd.DataFrame(division[:-1])
     dfHistCounts["Counts - no DMR"] = countNoDMR.tolist()
-    dfHistCounts["Counts - DMR"] = countDMR.tolist()
-    dfHistCounts["Counts - AFR"] = countAFRSNVs.tolist()    
+    dfHistCounts["Counts - DMR only"] = countDMROnly.tolist()
+    dfHistCounts["Counts - AFR only"] = countAFRSNVsOnly.tolist()    
+    dfHistCounts["Counts - DMR and AFR"] = countDMRsAFRSNVsOnly.tolist()    
     
-    dfHistCounts.columns=["no of 3UTR targets", "no DMR", "DMR", "AFRSNVs"]
+    dfHistCounts.columns=["no of 3UTR targets", "no DMR", "DMR", "AFRSNVs", "DMR+AFRSNVs"]
     dfHistCounts.to_csv(os.path.splitext(groupedpredsFile)[0] + "_HistDMRNoDMR.tsv")
     statsFile = os.path.splitext(groupedpredsFile)[0] + "_statsDMRNoDMR.tsv"
     with open(statsFile, 'w') as fStats:
-        fStats.write("no DMR: total targeting events" + "\t" + str(countsByMiRNAsNoDMR.sum()) + "\n")
-        fStats.write("      : median" + "\t" + str(countsByMiRNAsNoDMR.median()) + "\n")
-        fStats.write("      : average" + "\t" + str(countsByMiRNAsNoDMR.mean()) + "\n")
-        fStats.write("   DMR: total targeting events" + "\t" + str(countsByMiRNAsDMR.sum()) + "\n")        
-        fStats.write("      : median" + "\t" + str(countsByMiRNAsDMR.median()) + "\n")
-        fStats.write("      : average" + "\t" + str(countsByMiRNAsDMR.mean()) + "\n")
-        fStats.write("   AFR: total targeting events" + "\t" + str(countsByMiRNAsAFRSNVs.sum()) + "\n")        
-        fStats.write("      : median" + "\t" + str(countsByMiRNAsAFRSNVs.median()) + "\n")
-        fStats.write("      : average" + "\t" + str(countsByMiRNAsAFRSNVs.mean()) + "\n")
-    plotHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_countsByMiRNAsDMRmod.png"
-    bins=list(range(0, max(countsByMiRNAsNoDMR)+2))
+        fStats.write("      : total targeting events" + "\t" + str(countsByMiRNAsAll.sum()) + "\n")
+        fStats.write("      : median" + "\t" + str(countsByMiRNAsAll.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(countsByMiRNAsAll.mean()) + "\n")
+        fStats.write("  NONE: no perturbation" + "\t" + str(dfCountsNoPerturbs.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(dfCountsNoPerturbs.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(dfCountsNoPerturbs.mean()) + "\n")
+        fStats.write("   DMR: only targeting events" + "\t" + str(dfCountsDMROnly.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(dfCountsDMROnly.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(dfCountsDMROnly.mean()) + "\n")
+        fStats.write("   AFR: total targeting events" + "\t" + str(dfCountsAFROnly.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(dfCountsAFROnly.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(dfCountsAFROnly.mean()) + "\n")
+        fStats.write(" BOTH : DMR + AFR targeting events" + "\t" + str(dfCountsDMRsAndSNVs.sum()) + "\n")        
+        fStats.write("      : median" + "\t" + str(dfCountsDMRsAndSNVs.median()) + "\n")
+        fStats.write("      : average" + "\t" + str(dfCountsDMRsAndSNVs.mean()) + "\n")
+        
+    # pretty histogram
+    plotHistogramFileCountsByMiRNAs = os.path.splitext(groupedpredsFile)[0] + "_StackedHistogram.png"
+    bins=list(range(0, max(countsByMiRNAsAll)+2))
+    dfCounts=pd.concat([pd.DataFrame(countsByMiRNAsDMRsAndSNVs), countsByMiRNAsAFROnly], ignore_index=True, axis=1)
+    dfCounts=pd.concat([dfCounts, countsByMiRNAsDMROnly], ignore_index=True, axis=1)
+    dfCounts=pd.concat([dfCounts, countsByMiRNAsNoPerturbs], ignore_index=True, axis=1)
+    arrHistCounts=dfCounts.to_numpy()
+    colors = ['plum', 'cornflowerblue', "lime", "slateblue"]
+    labels=["DMRs & AFR SNVs", "AFR SNVs Only", "DMR Only", "No Perturbs"]
+    
 
-    pyplot.hist(countsByMiRNAsNoDMR, bins, alpha=0.3, label='noDMR', color='cornflowerblue', edgecolor="navy")
-    pyplot.hist(countsByMiRNAsDMR, bins, alpha=0.3, label='DMR', color='plum', edgecolor="slateblue")
-    pyplot.hist(countsByMiRNAsAFRSNVs, bins, alpha=0.3, label='AFR', color='green', edgecolor="mediumseagreen")
-    pyplot.xlabel("no of targets")
-    pyplot.ylabel("no of miRNAs")
+    pyplot.hist(arrHistCounts, bins, density=True, histtype='bar', color=colors, label=labels, stacked=True, edgecolor="navy")
+    pyplot.legend(prop={'size': 10})
     pyplot.title("connectivity DMR vs no DMR")
-    pyplot.legend(loc='upper right')
+    pyplot.xlabel("no of targets")
+    pyplot.ylabel("no of miRNAs")   
+    pyplot.legend(loc='upper right') 
+
     pyplot.savefig(plotHistogramFileCountsByMiRNAs)
     
       
