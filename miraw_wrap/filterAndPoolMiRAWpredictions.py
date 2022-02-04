@@ -327,7 +327,8 @@ def processSamplesByDMR():
     # miRNA has four parts:     hsa-miR-548t-3p_MIMAT0022730_homo_sapiens_miR-548t-3p
     #   keep Common Name and MIMAT id
     allPreds['shortGeneName']=allPreds['GeneName'].str.split("|").str[0] + "|" + allPreds['GeneName'].str.split("|").str[2]
-    allPreds['shortmiRName']=allPreds['miRNA'].str.split("_").str[0]+ "|" + allPreds['miRNA'].str.split("_").str[1]    
+    #allPreds['shortmiRName']=allPreds['miRNA'].str.split("_").str[0]+ "|" + allPreds['miRNA'].str.split("_").str[1]
+    allPreds['shortmiRName']=allPreds['miRNA']
     groupedAllPreds = allPreds.groupby(['shortGeneName','shortmiRName']).size().reset_index().rename(columns={0:'count'})
     outputFileGrpAllPreds = os.path.splitext(resultfiles)[0] + "_allfilteredGrouped.tsv" 
     groupedAllPreds.to_csv(outputFileGrpAllPreds, sep='\t')

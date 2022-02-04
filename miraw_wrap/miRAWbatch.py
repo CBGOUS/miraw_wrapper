@@ -444,7 +444,8 @@ def writeUnifiedFileBymiRNA():
     #
     logging.info("writeUnifiedFileBymiRNA")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
-    with open(unifiedFilePath, "w") as f:
+    featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "byMiRs" + '.unifiedFile.csv' )
+    with open(featuresFile, "w") as f:
         f.write(headerLine)
         m = 0
         for mHeader in miRheaderList:
@@ -471,7 +472,8 @@ def writeUnifiedFileByUTR():
     #
     logging.info("writeUnifiedFileByUTR")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
-    with open(unifiedFilePath, "w") as f:
+    featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "by3pUTRs" + '.unifiedFile.csv' )
+    with open(featuresFile, "w") as f:
         f.write(headerLine)
         u = 0
         for uHeader in UTRheaderList:
@@ -645,12 +647,12 @@ def buildNewUnifiedFile():
     readUTRFile()
 
     if int(args.splitType) == UNIFIEDFILE_EXISTS:
-        writePropertiesFile()
+        #writePropertiesFile()
         writeUnifiedFileBymiRNA()
         return()
 
     if int(args.splitType) == WRITE_BY_MIRNA:
-        writePropertiesFile()
+        #writePropertiesFile()
         writeUnifiedFileBymiRNA()
         return()
 

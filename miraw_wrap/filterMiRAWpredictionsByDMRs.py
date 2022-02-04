@@ -352,7 +352,9 @@ def processSamplesByDMR():
     # (we have the coordinates through the mergeMiRNAData method)
     # 
     #uniqueMiRList = dfFullMiRInfo["MIMATID"].unique()
-    for index, miR in dfFullMiRInfo.iterrows():        
+    for index, miR in dfFullMiRInfo.iterrows():   
+        if miR['MIMATID']=="MIMAT0019954":
+            print(miR[['MIMATID']])       
         dmrHits = dfDMRFeatureList.loc[(dfDMRFeatureList['Chr'] == miR['chr_x']) 
                                        & (dfDMRFeatureList['End position']-miR['featureStart_x'] <= int(featureDistance))
                                        & (dfDMRFeatureList['End position']-miR['featureStart_x'] >= 0)]
@@ -378,7 +380,7 @@ def processSamplesByDMR():
         elif miR['AFR'] > 0:
             
             
-            print(miR['MIMATID'] + "|" + str(len(dmrHits)))
+            #print(miR['MIMATID'] + "|" + str(len(dmrHits)))
             allSNVHits.append({"MIMATID":miR['MIMATID'], 
                                "number_of_hits":0, 
                                "distance":0,
@@ -418,13 +420,16 @@ def processSamplesByDMR():
     grpPredData['SupPopsPerNT']=0.0    
     
     for index, dmrMiR in dfDMRHits.iterrows():
-        #print(dmrMiR)
+
+        print(str(index))  
+        if dmrMiR['MIMATID']=="MIMAT0019954":
+            print(dmrMiR[['MIMATID', 'number_of_hits']])    
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'DMRcount']=dmrMiR['number_of_hits']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'DMRdist']=dmrMiR['distance']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'EUR']=dmrMiR['EUR']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'EAS']=dmrMiR['EAS']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'AMR']=dmrMiR['AMR']
-        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'SAS']=dmrMiR['SAS']
+        ''''.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'SAS']=dmrMiR['SAS']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'AFR']=dmrMiR['AFR']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'SNVsPerNT']=dmrMiR['SNVsPerNT']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID'])), 'SubPopsPerNT']=dmrMiR['SubPopsPerNT']
@@ -432,11 +437,11 @@ def processSamplesByDMR():
                 
     outputFileallfilteredGroupedDMRmod = os.path.splitext(groupedpredsFile)[0] + "_allfilteredGroupedDMRmod.tsv" 
     grpPredData.to_csv(outputFileallfilteredGroupedDMRmod, sep='\t')
-   
+    # grpPredData.loc[(grpPredData['shortmiRName'].str.contains(dmrMiR['MIMATID']))][["shortGeneName", "MIMATID"]]
     for index, snvMiR in dfSNVHits.iterrows():
         #print(dmrMiR)
-        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRcount']=snvMiR['number_of_hits']
-        grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRdist']=snvMiR['distance']
+        #grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRcount']=snvMiR['number_of_hits']
+        #grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'DMRdist']=snvMiR['distance']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'EUR']=snvMiR['EUR']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'EAS']=snvMiR['EAS']
         grpPredData.loc[(grpPredData['shortmiRName'].str.contains(snvMiR['MIMATID'])), 'AMR']=snvMiR['AMR']
@@ -539,9 +544,19 @@ def processSamplesByDMR():
     
     # 2. number of miRNAs / 3'UTR
     #countsBy3pUTRsNoDMR = grpPredData['shortGeneName'].value_counts()
-    countsBy3pUTRDMR = grpPredData.loc[grpPredData['DMRcount']==0]['shortGeneName'].value_counts()
+    xx=grpPredData.loc[grpPredData['shortGeneName']=="ENSG00000125798|FOXA2"][['shortGeneName','shortmiRName','DMRcount','AFR']]
+    
+    xx.to_csv(os.path.splitext(groupedpredsFile)[0] + "_xx.tsv", sep='\t')
+    countsBy3pUTRNoPerturb =grpPredData.loc[(grpPredData['DMRcount']==0) & (grpPredData['AFR']==0)]['shortGeneName'].value_counts()
+    countsBy3pUTRDMRsOnly  = grpPredData.loc[(grpPredData['DMRcount']!=0) & (grpPredData['AFR']==0)]['shortGeneName'].value_counts()
+    countsBy3pUTRAFRSNVsOnly = grpPredData.loc[(grpPredData['DMRcount']==0) & (grpPredData['AFR']!=0)]['shortGeneName'].value_counts()
+    countsBy3pUTRNAFRandSNVs = grpPredData.loc[(grpPredData['DMRcount']!=0) & (grpPredData['AFR']!=0)]['shortGeneName'].value_counts()
+    df3pUTRCounts=pd.concat([pd.DataFrame(countsBy3pUTRNoPerturb), countsBy3pUTRDMRsOnly], ignore_index=True, axis=1)
+    df3pUTRCounts=pd.concat([df3pUTRCounts, countsBy3pUTRAFRSNVsOnly], ignore_index=True, axis=1)
+    df3pUTRCounts=pd.concat([df3pUTRCounts, countsBy3pUTRNAFRandSNVs], ignore_index=True, axis=1)
+    df3pUTRCounts.columns=[ "no perturbations", "DMR only", "AFRSNVs only", "Both DMR+AFRSNVs"]
     outputFileCountsBy3pUTRs = os.path.splitext(groupedpredsFile)[0] + "_countsBy3pUTRsDMRmod.tsv" 
-    countsBy3pUTRDMR.to_csv(outputFileCountsBy3pUTRs, sep='\t')
+    df3pUTRCounts.to_csv(outputFileCountsBy3pUTRs, sep='\t')
 
 
              
