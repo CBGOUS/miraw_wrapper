@@ -20,6 +20,8 @@ CSSM_PITA = "pita"
 CSSM_REGULAR = "Regular"
 CSSM_PERSONALIZED = "Personalized"
 
+WRAPVERSION = "1.0.0"
+
 maximumSiteLength = 40
 seedAlignmentOffset = 5
 filterByAccessibilityEnergy = False
@@ -90,8 +92,11 @@ args = parser.parse_args()
 
 
 def printLongHelpAndExit():
+    logging.info("")
+    
     logging.info("+" + "-" * 78 + "+")
     logging.info("+  RAWWrap:                                                                    +")
+    logging.info("+    version " + WRAPVERSION + "                                                             +")
     logging.info("+    wrapper code for generating files and scripts to run miRAW                +")
     logging.info("+                                                                              +")
     logging.info("+    you need to specify:                                                      +")
