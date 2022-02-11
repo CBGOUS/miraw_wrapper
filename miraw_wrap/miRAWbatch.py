@@ -20,7 +20,7 @@ CSSM_PITA = "pita"
 CSSM_REGULAR = "Regular"
 CSSM_PERSONALIZED = "Personalized"
 
-WRAPVERSION = "1.0.0"
+WRAPVERSION = "1.0.1"
 
 maximumSiteLength = 40
 seedAlignmentOffset = 5
