@@ -449,6 +449,7 @@ def writeUnifiedFileBymiRNA():
     #
     logging.info("writeUnifiedFileBymiRNA")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
+    writePropertiesFileForFeature("byMiRs")
     featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "byMiRs" + '.unifiedFile.csv' )
     with open(featuresFile, "w") as f:
         f.write(headerLine)
@@ -465,7 +466,7 @@ def writeUnifiedFileBymiRNA():
     #java -jar miRAW.jar GenePrediction predict ./Results/firstTry/firstTry.EF.properties
     with open(os.path.join(args.outFolder, args.exptName  + '.sh'), "w") as f:
         f.write("java -jar " + jarLocation + " GenePrediction predict "
-                + os.path.join(args.outFolder, args.exptName  + ".properties") + MY_NEWLINE)
+                + os.path.join(args.outFolder, args.exptName  + "." + "byMiRs"  + ".properties") + MY_NEWLINE)
 
 
 
