@@ -116,6 +116,7 @@ This takes a set of miRAW predictions and pools them after filtering
 
 The script is trying to fulfill many tasks at the same time, so it is still evolving
 
+## Parameters
 Current Parameters are:
 
 ```
@@ -147,6 +148,24 @@ You can get a list of all the `allTargetSites.csv` files using the following com
 ```
 > find /Users/happybunny/data/hb_miraw_predictions/ -name *allTargetSites.csv
 ```
+
+## Current Issues
+### Gene Names
+One of the issues is that the gene name must take one of two formats:
+
+#### Long Format
+```
+ACCESSION_ID1|ACCESSION_ID2|SHORT GENE NAME|START POSITION|END POSITION
+```
+For example
+```
+ENSG00000071575|ENST00000155926|TRIB2|12740795|12742734
+```
+Where `ACCESSION_ID1` and `ACCESSION_ID2` are gene accession numbers in public databases (e.g. **Ensembl ID** and **NCBI RefGene ID**) and `SHORT GENE NAME` is the user friendly name used in the literature. 
+
+#### Short Format
+If the naming convention doesn't follow this format (the code looks for the presence of the `|` character in the gene string), then it just uses the full string.
+
 
 # An example of target prediction set up and filtering 
 
