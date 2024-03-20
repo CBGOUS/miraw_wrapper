@@ -501,6 +501,7 @@ def readPositiveSitesFile():
     logging.info("read PositiveSiteFile")
     global miRAWpositiveSitesFile, positiveSiteLines
     utrNames = []
+    global positiveTargetsHeaderLine
     global gGeneName
     global gMiRNA
     global gSiteStart
@@ -548,6 +549,7 @@ def readPositiveSitesFile():
         p=0
         for line in positiveSiteLines:
             if p==0:
+                positiveTargetsHeaderLine = line
                 p+=1
                 continue
             if not line.split("\t")[0].isdigit():
@@ -890,7 +892,8 @@ def writeFilteredPositiveData():
     r = 0
     with open(filteredTargetPredictionFile, 'w') as fT:
         fT.write(headerString + MY_NEWLINE)
-        fT.write(HEADER_LINE + MY_NEWLINE)
+        #fT.write(HEADER_LINE + MY_NEWLINE)
+        fT.write(positiveTargetsHeaderLine )
         while r < len(dropPredictions):
             if dropPredictions[r] == 1:
                 fT.write(gGeneName[r] + "\t" + \
