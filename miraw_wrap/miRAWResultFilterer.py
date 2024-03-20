@@ -3,12 +3,25 @@ import sys
 import os
 import logging
 import csv
-import datetime
+#import datetime
+from datetime import datetime
+import hashlib
+
+DEBUG = 1
+TESTRUN = 0
+PROFILE = 0
 
 MY_NEWLINE = "\n"
 if os.name== "Windows":
     MY_NEWLINE ="\r\n"
-    
+
+
+__all__ = []
+__version__ = 0.1
+__date__ = '2020-12-19'
+__updated__ = '2020-12-19'
+
+
 EXTRACT_POSITIVE_PREDICTIONS    = "EXPOS"
 EXTRACT_NEGATIVE_PREDICTIONS    = "EXNEG"
 FILTER_POSITIVE_PREDICTIONS     = "FTPOS"
@@ -58,7 +71,72 @@ totalDrops = 0
 headerString = "#" + MY_NEWLINE
 
 
+class CLIError(Exception):
+    '''Generic exception to raise and log different fatal errors.'''
+
+    def __init__(self, msg):
+        super(CLIError).__init__(type(self))
+        self.msg = "E: %s" % msg
+
+    def __str__(self):
+        return self.msg
+
+    def __unicode__(self):
+        return self.msg
+
+
+def initLogger(md5string):
+    ''' setup log file based on project name'''
+
+    now = datetime.now()
+    dt_string = now.strftime("%Y%m%d_%H%M%S")
+    logFolder = os.path.join(os.getcwd(), "logfiles")
+    if not os.path.exists(logFolder):
+        print("--log folder <" + logFolder + "> doesn't exist, creating")
+        os.makedirs(logFolder)
+    logfileName = os.path.join(logFolder, logFileName + "__" + dt_string + "__" + md5string + ".log")
+    handler = logging.StreamHandler(sys.stdout)
+    logging.basicConfig(level=logging.DEBUG)
+
+    fileh = logging.FileHandler(logfileName, 'a')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fileh.setFormatter(formatter)
+
+    log = logging.getLogger()  # root logger
+    for hdlr in log.handlers[:]:  # remove all old handlers
+        log.removeHandler(hdlr)
+    log.addHandler(fileh)  # set the new handler
+    log.addHandler(handler)
+    logging.info("+" + "*" * 78 + "+")
+    logging.info("project log file is <" + logfileName + ">")
+    logging.info("+" + "*" * 78 + "+")
+    logging.debug("debug mode is on")
+
+
 #GeneName    GeneId    miRNA    Prediction    HighestPredVal    LowestPredVal    PosSites    NegSites    RemovedSites        miRNA    miRNA
+
+GENE_NAME = 0
+MIRNA = 1
+SITE_START = 2
+SITE_END = 3
+PREDICTION = 4
+PAIR_START_IN_SITE = 5
+SEED_START = 6
+SEED_END = 7
+PAIRS = 8
+WC = 9
+WOB = 10
+MFE = 11
+CANONICAL = 12
+SITE_TRANSCRIPT_5TO3 = 13
+MATURE_MIRNA_TRANSCRIPT = 14
+BRACKET_NOTATION = 15
+FILTERED = 16
+FILTERING  = 17
+REASON = 18
+ADDITIONAL_PROPERTIES = 19
+
+
 GENE_NAME_COL          = 0
 GENE_ID_COL            = 1
 MIRNA_NAME_COL         = 2
@@ -115,45 +193,81 @@ miRNASequences = {}
 
 logging.getLogger().setLevel(logging.INFO)
 
-parser = argparse.ArgumentParser(description='set up batch commands to run miRAW')
+def parseArgs(argv):
+    '''parse out Command line options.'''
 
-parser.add_argument("-H", "--HelpMe", action="store_true",
-                    help="print detailed help")
+    global parser
 
-parser.add_argument("-t", "--target_pred_file", dest='targetPredFile',
-                    help="miRAW summary of results file (.targetPredictionOutput.csv)")
+    program_name = os.path.basename(sys.argv[0])
+    program_version = "v%s" % __version__
+    program_build_date = str(__updated__)
+    program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
+    program_shortdesc = "filterMiRAWResults"
 
-parser.add_argument("-s", "--target_site_file", dest='targetSiteFile',
-                    help="miRAW detailed results file (.positiveTargetSites.csv)")
+    program_license = '''%s
+    i
+      Created by Simon Rayner on %s.
+      Copyright 2020 Oslo University Hospital. All rights reserved.
 
-parser.add_argument("-u", "--unified_input_file", dest='unifiedInputFile',
-                    help="miRAW input file used for target prediction (.unifiedFile.csv)")
+      Licensed under the Apache License 2.0
+      http://www.apache.org/licenses/LICENSE-2.0
 
-parser.add_argument("-e", "--energy-cutoff", dest='energyCutOff',
-                    help="remove predictions ABOVE this energy (i.e. weaker bindings)")
+      Distributed on an "AS IS" basis without warranties
+      or conditions of any kind, either express or implied.
 
-parser.add_argument("-p", "--pos-prob-cutoff", dest='posProbCutOff',
-                    help="remove positive predictions BELOW this prediction probability")
+    USAGE
+    ''' % (program_shortdesc, str(__date__))
 
-parser.add_argument("-n ", "--neg-prob-cutoff", dest='negProbCutOff',
-                    help="remove negative predictions ABOVE this prediction probability")
+    try:
+        # Setup argument parser
 
-parser.add_argument("-L ", "--extract_from_list", dest='extractListFile',
-                    help="remove negative predictions ABOVE this prediction probability")
+        parser = argparse.ArgumentParser(description='parse miRAW prediction results')
 
-parser.add_argument("-R", "--remove_conflicts", action="store_true",
-                    help="remove predictions with both positive and negative predictions")
+        parser.add_argument("-H", "--HelpMe", action="store_true",
+                            help="print detailed help")
+        parser.add_argument("-t", "--target_pred_file", dest='targetPredFile',
+                            help="miRAW summary of results file (.targetPredictionOutput.csv)")
+        parser.add_argument("-s", "--target_site_file", dest='targetSiteFile',
+                            help="miRAW detailed results file (.positiveTargetSites.csv)")
+        parser.add_argument("-u", "--unified_input_file", dest='unifiedInputFile',
+                            help="miRAW input file used for target prediction (.unifiedFile.csv)")
+        parser.add_argument("-e", "--energy-cutoff", dest='energyCutOff',
+                            help="remove predictions ABOVE this energy (i.e. weaker bindings)")
+        parser.add_argument("-p", "--pos-prob-cutoff", dest='posProbCutOff',
+                            help="remove positive predictions BELOW this prediction probability")
+        parser.add_argument("-n ", "--neg-prob-cutoff", dest='negProbCutOff',
+                            help="remove negative predictions ABOVE this prediction probability")
+        parser.add_argument("-L ", "--extract_from_list", dest='extractListFile',
+                            help="remove negative predictions ABOVE this prediction probability")
+        parser.add_argument("-R", "--remove_conflicts", action="store_true",
+                            help="remove predictions with both positive and negative predictions")
+        parser.add_argument("-K", "--keep_conflicts", action="store_true",
+                            help="keep predictions with both positive and negative predictions")
+        parser.add_argument("-P", "--extract_pos_preds", action="store_true",
+                            help="keep positive predictions, remove negative prediction")
+        parser.add_argument("-N", "--extract_neg_preds", action="store_true",
+                            help="keep negative predictions, remove positive predictions")
+        global args
+        args = parser.parse_args()
+        if args.HelpMe:
+            printLongHelpAndExit()
+            exit()
 
-parser.add_argument("-K", "--keep_conflicts", action="store_true",
-                    help="keep predictions with both positive and negative predictions")
 
-parser.add_argument("-P", "--extract_pos_preds", action="store_true",
-                    help="keep positive predictions, remove negative prediction")
 
-parser.add_argument("-N", "--extract_neg_preds", action="store_true",
-                    help="keep negative predictions, remove positive predictions")
+    except KeyboardInterrupt:
+        ### handle keyboard interrupt ###
+        return 0
+    except Exception as e:
+        print(e)
+        if DEBUG or TESTRUN:
+            raise(e)
+        indent = len(program_name) * " "
+        sys.stderr.write(program_name + ": " + repr(e) + "\n")
+        sys.stderr.write(indent + "  for help use --help")
+        return 2
 
-args = parser.parse_args()
+
 
 
 def printLongHelpAndExit():
@@ -326,7 +440,7 @@ def checkRemovemiRNAs():
         
 
 def checkTargetPredictionFile():
-    global miRAWtargetPredictionFile, filteredTargetPredictionFile            
+    global miRAWtargetPredictionFile, filteredTargetPredictionFile, logFileName
     logging.info("check TargetPredictionFile")
     if args.targetPredFile:
         miRAWtargetPredictionFile=args.targetPredFile
@@ -337,6 +451,7 @@ def checkTargetPredictionFile():
         if not os.path.isfile(miRAWtargetPredictionFile):
             logging.error("--can't find Target Prediction File at <" + miRAWtargetPredictionFile + ">")
             exit()
+        logFileName =miRAWpositiveSitesFile.split(".")[0]
     logging.info("--OK")
 
 
@@ -386,6 +501,47 @@ def readPositiveSitesFile():
     logging.info("read PositiveSiteFile")
     global miRAWpositiveSitesFile, positiveSiteLines
     utrNames = []
+    global gGeneName
+    global gMiRNA
+    global gSiteStart
+    global gSiteEnd
+    global gPrediction
+    global gPairStartInSite
+    global gSeedStart
+    global gSeedEnd
+    global gPairs
+    global gWC
+    global gWob
+    global gMFE
+    global gCanonical
+    global gSiteTranscript5to3
+    global gMatureMiRNATranscript
+    global gBracketNotation
+    global gFiltered
+    global gFiltering
+    global gReason
+    global gAdditionalProperties
+
+    gGeneName = []
+    gMiRNA = []
+    gSiteStart = []
+    gSiteEnd = []
+    gPrediction = []
+    gPairStartInSite = []
+    gSeedStart = []
+    gSeedEnd = []
+    gPairs = []
+    gWC = []
+    gWob = []
+    gMFE = []
+    gCanonical = []
+    gSiteTranscript5to3 = []
+    gMatureMiRNATranscript = []
+    gBracketNotation = []
+    gFiltered = []
+    gFiltering = []
+    gReason = []
+    gAdditionalProperties = []
 
     with open(miRAWpositiveSitesFile, 'r') as fP:
         positiveSiteLines = fP.readlines()
@@ -395,13 +551,35 @@ def readPositiveSitesFile():
                 p+=1
                 continue
             if not line.split("\t")[0].isdigit():
-                positiveSiteLocations[line.split("\t")[0].strip() + UTR_QUERY_DELIMITER + line.split("\t")[1].strip()]=p
-                miRNASequences[line.split("\t")[1].strip()] = line.split("\t")[2].strip()
-                utrNames.append(line.split("\t")[0].strip() + UTR_QUERY_DELIMITER + line.split("\t")[1].strip())
-            p+=1    
+                gGeneName.append(line.split("\t")[GENE_NAME].strip())
+                gMiRNA.append(line.split("\t")[MIRNA].strip())
+                gSiteStart.append(line.split("\t")[SITE_START].strip())
+                gSiteEnd.append(line.split("\t")[SITE_END].strip())
+                gPrediction.append(line.split("\t")[PREDICTION].strip())
+                gPairStartInSite.append(line.split("\t")[PAIR_START_IN_SITE].strip())
+                gSeedStart.append(line.split("\t")[SEED_START].strip())
+                gSeedEnd.append(line.split("\t")[SITE_END].strip())
+                gPairs.append(line.split("\t")[PAIRS].strip())
+                gWC.append(line.split("\t")[WC].strip())
+                gWob.append(line.split("\t")[WOB].strip())
+                gMFE.append(line.split("\t")[MFE].strip())
+                gCanonical.append(line.split("\t")[CANONICAL].strip())
+                gSiteTranscript5to3.append(line.split("\t")[SITE_TRANSCRIPT_5TO3].strip())
+                gMatureMiRNATranscript.append(line.split("\t")[MATURE_MIRNA_TRANSCRIPT].strip())
+                gBracketNotation.append(line.split("\t")[BRACKET_NOTATION].strip())
+                gFiltered.append(line.split("\t")[FILTERED].strip())
+                gFiltering.append(line.split("\t")[FILTERING].strip())
+                gReason.append(line.split("\t")[REASON].strip())
+                #gAdditionalProperties.append(line.split("\t")[ADDITIONAL_PROPERTIES].strip())
+                #positiveSiteLocations[line.split("\t")[0].strip() + UTR_QUERY_DELIMITER + line.split("\t")[1].strip()]=p
+                #miRNASequences[line.split("\t")[1].strip()] = line.split("\t")[2].strip()
+
+
+                dropPredictions.append(0)
+            p+=1
                 
     logging.info("--read <" + str(len(positiveSiteLines)) + "> lines")            
-    logging.info("--read <" + str(len(positiveSiteLocations)) + "> target pairs")            
+    logging.info("--read <" + str(len(dropPredictions)) + "> target pairs")
     logging.info("--done")
         
  
@@ -421,7 +599,7 @@ def readUnifiedFile():
                 if not utrID in utrSequences:
                     utrSequences[utrID] = line.split("\t")[UNIFIED_UTRSEQ_COL]
             u+=1       
-    logging.info("--read " + str(len(utrSequences)) + " 3'UTR sequence(s)")   
+    logging.info("--read " + str(len(utrSequences)) + " 3'UTR sequence(s)")
     logging.info("--done")     
 
     
@@ -451,9 +629,9 @@ def readTargetPredictionFile():
                 positiveSites.append(line.split("\t")[POSITIVE_SITES_COL])
                 negativeSites.append(line.split("\t")[NEGATIVE_SITES_COL])
                 removedSites.append(line.split("\t")[REMOVED_SITES_COL])     
-                dropPredictions.append(0)
+                #dropPredictions.append(0)
             l+=1
-    logging.info("--read " + str(len(geneNames)) + " predictions")   
+    logging.info("--read " + str(len(geneNames)) + "3'UTR/miRNA prediction pairs")
     logging.info("--done")     
             
             
@@ -503,24 +681,33 @@ def filterByProbability():
         #logging.info(str(positiveSites[r]) + "|"  \
         #             + str(negativeSites[r]) + "\t" + str(positiveProbabilityCutoff) \
         #             + "|"+ str(negativeProbabilityCutoff) + "\t" + str(predictions[r]) )
-        if int(positiveSites[r]) > 0:
-            if positiveProbabilityCutoff > float(predictions[r]): 
-                dropPredictions[r]=1
-                posProbDropCount += 1
-        else:
-            if int(negativeSites[r]) > 0:
-                if negativeProbabilityCutoff < float(predictions[r]):
-                    dropPredictions[r]=1
-                    negProbDropCount += 1
+
+        if float(gPrediction[r]) > positiveProbabilityCutoff:
+            dropPredictions[r]=1
+            posProbDropCount += 1
+
         r += 1
         
     logging.info("--Dropped " + str(posProbDropCount) + " positive entries")
-    logging.info("--Dropped " + str(negProbDropCount) + " negative entries")
-    totalDrops += posProbDropCount + negProbDropCount
+    totalDrops = posProbDropCount
 
-    
 
-                                
+def filterByMFEAndProbability():
+    logging.info("filter by MFE")
+    global keepCount
+
+    r = 0
+    keepCount = 0
+    while r < len(dropPredictions):
+        if float(gMFE[r]) < -bindingEnergyCutoff and float(gPrediction[r]) > positiveProbabilityCutoff:
+            dropPredictions[r]=1
+            keepCount += 1
+        r += 1
+
+    logging.info("--kept " + str(keepCount) + " entries")
+
+
+
 def filterByPositive():
     logging.info("filter by positives")
     global posDropCount, totalDrops
@@ -674,63 +861,62 @@ def writeFilteredDetailedData():
     
     
 
-def writeFilteredSummaryData():
-    logging.info(" write filtered Data")
-    
+
+def writeFilteredPositiveData():
+    logging.info(" write filtered Positive Site Data")
+
     global filteredTargetPredictionFile, headerString, totalDrops
     global conflictDropCount, keepDropCount, emptyCount, filterCount
     global negDropCount, posDropCount, negProbDropCount, posProbDropCount
-    global negativeProbabilityCutoff, positiveProbabilityCutoff    
+    global negativeProbabilityCutoff, positiveProbabilityCutoff
     headerString = headerString + "#             " + MY_NEWLINE
-    headerString = headerString + "#   filtered target prediction data" + MY_NEWLINE
+    headerString = headerString + "#   filtered positiveTargetSites.detailed.csv file" + MY_NEWLINE
     headerString = headerString + "#   generated by miRAWResultFilterer" + MY_NEWLINE
-    headerString = headerString + "#  " + str(datetime.datetime.now()) + MY_NEWLINE
+    headerString = headerString + "#   on  " + str(datetime.now()) + MY_NEWLINE
     headerString = headerString + "#             " + MY_NEWLINE
-    if keepDropCount>0:
-        headerString = headerString + "#   kept " + str(keepDropCount) + \
-                    " entries with both positive + negative predictions#" + MY_NEWLINE
+    if keepDropCount > 0:
+        headerString = headerString + "#   kept " + str(keepCount) + " predictions #" + MY_NEWLINE
     else:
-        headerString = headerString + "#   removed " + str(conflictDropCount) + \
-                    " entries with both positive + negative predictions#" + MY_NEWLINE
-    headerString = headerString + "#   removed " + str(emptyCount) + \
-                " entries with no predictions#" + MY_NEWLINE
-    headerString = headerString + "#   removed " + str(negDropCount) + \
-                " entries by dropping negative entries#" + MY_NEWLINE
-    headerString = headerString + "#   dropped " + str(posDropCount) + \
-                " entries by dropping positive entries#" + MY_NEWLINE
-    headerString = headerString + "#   removed " + str(posProbDropCount) + \
-                " positive entries with prediction probability < "  + str(negativeProbabilityCutoff) + MY_NEWLINE
-    headerString = headerString + "#   removed " + str(negProbDropCount) + \
-                " negative entries with prediction probability > " + str(positiveProbabilityCutoff) + MY_NEWLINE
-    headerString = headerString + "#   removed " + str(filterDropCount) + \
-                " entries with matches in miRNA name filter file <" + \
-                mirnaFilterFile + ">" + MY_NEWLINE
-    headerString = headerString + "#   total removed entries: " + str(totalDrops) +  \
-                " out of " + str(len(geneIDs)) + " predictions"
+        headerString = headerString + \
+                       "#   removed " + str(len(dropPredictions) - keepCount) + " entries" + MY_NEWLINE + \
+                       "#       with a MFE cut off of <" + str(bindingEnergyCutoff) + ">" + MY_NEWLINE + \
+                       "#       and a prediction probability below < " + str(positiveProbabilityCutoff) + ">"+ MY_NEWLINE
+
+
     headerString = headerString + "#             " + MY_NEWLINE
-    
+
+    filterLine = "__e" + str(bindingEnergyCutoff) + "_p_" + str(positiveProbabilityCutoff)
+    filteredTargetPredictionFile = miRAWpositiveSitesFile.replace(".csv", filterLine + ".csv")
     r = 0
-    with open(filteredTargetPredictionFile,'w') as fT:
+    with open(filteredTargetPredictionFile, 'w') as fT:
         fT.write(headerString + MY_NEWLINE)
-        fT.write(HEADER_LINE+ MY_NEWLINE)
-        while r<len(dropPredictions):
-            if dropPredictions[r]==0:
-                fT.write( geneNames[r] + "\t" + \
-                          geneIDs[r] + "\t" + \
-                          miRNANames[r] + "\t" + \
-                          predictions[r] + "\t" + \
-                          highestPredVal[r] + "\t" + \
-                          lowestPredVal[r] + "\t" + \
-                          positiveSites[r] + "\t" + \
-                          negativeSites[r] + "\t" + \
-                          removedSites[r] + MY_NEWLINE)
+        fT.write(HEADER_LINE + MY_NEWLINE)
+        while r < len(dropPredictions):
+            if dropPredictions[r] == 1:
+                fT.write(gGeneName[r] + "\t" + \
+                         gMiRNA[r] + "\t" + \
+                         gSiteStart[r] + "\t" + \
+                         gSiteEnd[r] + "\t" + \
+                         gPrediction[r] + "\t" + \
+                         gPairStartInSite[r] + "\t" + \
+                         gSeedStart[r] + "\t" + \
+                         gSeedEnd[r] + "\t" + \
+                         gPairs[r] + "\t" + \
+                         gWC[r] + "\t" + \
+                         gWob[r] + "\t" + \
+                         gMFE[r] + "\t" + \
+                         gCanonical[r] + "\t" + \
+                         gSiteTranscript5to3[r] + "\t" + \
+                         gMatureMiRNATranscript[r] + "\t" + \
+                         gBracketNotation[r] + "\t" + \
+                         gFiltered[r] + "\t" + \
+                         gFiltering[r] + "\t" + \
+                         gReason[r] + "\t" + MY_NEWLINE)
 
             r += 1
     logging.info("--finished")
-            
-            
-            
-    
+
+
 def checkArgs():
     
     if args.HelpMe :
@@ -753,32 +939,67 @@ def checkArgs():
 def filterData():
     global extractConflictPredictions, keepConflictPredictions
     logging.info("filterData")
-    removeEmptyPredictions()
+    #removeEmptyPredictions()
     if filterPredictionsByList:
         readFilterFile()
         filterByList()
-    if extractConflictPredictions:
-        filterByConflicts()
-    if keepConflictPredictions:
-        keepByConflicts()
-    if (positiveProbabilityCutoff > 0) or (negativeProbabilityCutoff < 0):
-        filterByProbability()
-    if removePositivePredictions:
-        filterByPositive()
-    if extractNegativePredictions:
-        filterByNegative()
+    # we have removed conflict processing for now.
+    # You can have a miRNA targeting different regions of the
+    # same 3'UTR with positive and negative predictions,
+    # but the model will never predict both
+    # for the same miRNA/mRNA fragment.
+    #if extractConflictPredictions:
+    #    filterByConflicts()
+    #if keepConflictPredictions:
+    #    keepByConflicts()
+    #if (positiveProbabilityCutoff > 0) or (negativeProbabilityCutoff < 0):
+    #filterByProbability()
+    filterByMFEAndProbability()
+    # if removePositivePredictions:
+    #    filterByPositive()
+    #if extractNegativePredictions:
+    #    filterByNegative()
     summarizeFiltering()
 
-    
 
+def main(argv=None):  # IGNORE:C0111
 
-checkArgs()
-readUnifiedFile()
-readPositiveSitesFile()
-readTargetPredictionFile()
+    md5String = hashlib.md5(b"CBGAMGOUS").hexdigest()
 
-filterData()
-writeFilteredSummaryData()
-writeFilteredDetailedData()
+    parseArgs(argv)
+    checkArgs()
+    initLogger(md5String)
+    readUnifiedFile()
+    readPositiveSitesFile()
+    readTargetPredictionFile()
+
+    filterData()
+    writeFilteredPositiveData()
+    #writeFilteredDetailedData()
+
+if __name__ == "__main__":
+    if DEBUG:
+        pass
+        # sys.argv.append("-h")
+        # sys.argv.append("-v")
+
+    if TESTRUN:
+        import doctest
+
+        doctest.testmod()
+    if PROFILE:
+        import cProfile
+        import pstats
+
+        profile_filename = 'fairpype.virusPipe_profile.txt'
+        cProfile.run('main()', profile_filename)
+        statsfile = open("profile_stats.txt", "wb")
+        p = pstats.Stats(profile_filename, stream=statsfile)
+        stats = p.strip_dirs().sort_stats('cumulative')
+        stats.print_stats()
+        statsfile.close()
+        sys.exit(0)
+    sys.exit(main())
+
 
 
