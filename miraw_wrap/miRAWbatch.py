@@ -576,10 +576,10 @@ def writePropertiesFile():
     global maximumSiteLength
     global seedAlignmentOffset
     unifiedFilePath = ""
-    if os.path.dirname(args.unifiedFile) != "":
+    if args.unifiedFile:
         unifiedFilePath = args.unifiedFile
     else:
-        unifiedFilePath = os.path.join(args.outFolder, args.unifiedFile)
+        unifiedFilePath = os.path.join(args.outFolder, args.exptName)
 
     with open(os.path.join(args.outFolder, args.exptName  + '.properties'), "w") as f:
         f.write("########################################" + MY_NEWLINE)
