@@ -278,7 +278,13 @@ def checkUnifiedFile():
 
 def checkCSSM():
     logging.info("checking CSSM:")
+
     if args.cssm:
+        if "'" in args.cssm:
+            args.cssm = args.cssm.replace("'","")
+        if "\"" in args.cssm:
+            args.cssm = args.cssm.replace("\"","")
+
         logging.info(args.cssm)
         if(args.cssm == CSSM_PITA):
             logging.info("--found pita CSSM")
@@ -318,12 +324,12 @@ def checkDLModel():
     logging.info("checking DLModel:")
     if args.dlModel:
         logging.info(args.dlModel)
-        if os.path.isfile(args.dlModel):
-            logging.info(args.dlModel)
-            logging.info("--DLModel file exists")
-        else:
-            logging.error("--can't find DLModel file")
-            printHelpAndExit()
+        #if os.path.isfile(args.dlModel):
+        #    logging.info(args.dlModel)
+        #    logging.info("--DLModel file exists")
+        #else:
+        #    logging.error("--can't find DLModel file")
+        #    printHelpAndExit()
     else:
             logging.info("--missing DLModel")
             logging.error("----you must specify a DLModel using the -d/--dlModel parameter")
@@ -430,14 +436,14 @@ def checkArgs():
 
 def readMiRNAFile():
 
-    inFile = open(args.miRFile,'rU')
+    inFile = open(args.miRFile,'r')
     for record in SeqIO.parse(inFile,'fasta'):
         miRheaderList.append(record.id)
         miRseqList.append(str(record.seq))
 
 
 def readUTRFile():
-    inFile = open(args.utrFile,'rU')
+    inFile = open(args.utrFile,'r')
     for record in SeqIO.parse(inFile,'fasta'):
         UTRheaderList.append(record.id)
         UTRseqList.append(str(record.seq))
@@ -478,6 +484,33 @@ def writeUnifiedFileByUTR():
     #
     logging.info("writeUnifiedFileByUTR")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
+
+    u = 0
+    with open(os.path.join(args.outFolder, args.exptName + '.sh'), "w") as fSh:
+
+        for uHeader in UTRheaderList:
+            logging.info("--<" + uHeader + ">")
+            featuresFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader + '.unifiedFile.csv' )
+            propertiesFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader + '.properties' )
+            with open(os.path.join(args.outFolder, featuresFile), 'w') as f:
+                f.write(headerLine)
+                m = 0
+                for mHeader in miRheaderList:
+                    f.write('\t'.join([mHeader, uHeader, uHeader, "?", miRseqList[m], UTRseqList[u]]) + MY_NEWLINE)
+                    m+=1
+            writePropertiesFileForFeature(uHeader)
+            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + propertiesFile + MY_NEWLINE)
+            u+=1
+
+
+
+
+    logging.info("done")
+
+def writeUnifiedFileByUTROld():
+    #
+    logging.info("writeUnifiedFileByUTR")
+    headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
     featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "by3pUTRs" + '.unifiedFile.csv' )
     with open(featuresFile, "w") as f:
         f.write(headerLine)
@@ -497,8 +530,6 @@ def writeUnifiedFileByUTR():
                 + os.path.join(args.outFolder, args.exptName  + ".properties") + MY_NEWLINE)
 
     logging.info("done")
-
-
 # miRNAs are in the outer loop
 # we write one file per miRNA
 # need to create a new .properties file for each miRNA as the unifiedFile name is stored in here
