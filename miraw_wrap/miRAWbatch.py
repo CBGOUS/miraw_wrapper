@@ -46,50 +46,54 @@ if os.name== "Windows":
 
 logging.getLogger().setLevel(logging.INFO)
 
+def parseArgs():
+    global parser
+    parser = argparse.ArgumentParser(description='set up batch commands to run miRAW')
 
-parser = argparse.ArgumentParser(description='set up batch commands to run miRAW')
+    parser.add_argument("-e", "--exptName", dest='exptName',
+                        help="specify name for the analysis")
 
-parser.add_argument("-e", "--exptName", dest='exptName',
-                    help="specify name for the analysis")
+    parser.add_argument("-o", "--outFolder", dest='outFolder',
+                        help="output folder for generated files")
 
-parser.add_argument("-o", "--outFolder", dest='outFolder',
-                    help="output folder for results")
+    parser.add_argument("-r", "--remoteFolder", dest='remoteFolder',
+                        help="remote folder where shell script will be run")
 
-parser.add_argument("-u", "--unifiedFile", dest='unifiedFile',
-                    help="absolute path for unifiedFile")
+    parser.add_argument("-u", "--unifiedFile", dest='unifiedFile',
+                        help="absolute path for unifiedFile")
 
-parser.add_argument("-d", "--dlModel", dest='dlModel',
-                    help="absolute path to trained model file")
+    parser.add_argument("-d", "--dlModel", dest='dlModel',
+                        help="absolute path to trained model file")
 
-parser.add_argument("-c", "--cssm", dest='cssm',
-                    help="Candidate Site Selection Model")
+    parser.add_argument("-c", "--cssm", dest='cssm',
+                        help="Candidate Site Selection Model")
 
-parser.add_argument("-m", "--mirnaFile", dest="miRFile",
-                    help="absolute path to miRBase fastA file")
+    parser.add_argument("-m", "--mirnaFile", dest="miRFile",
+                        help="absolute path to miRBase fastA file")
 
-parser.add_argument("-3", "--3UTR", dest="utrFile",
-                    help="absolute path to 3'UTR fastA file")
+    parser.add_argument("-3", "--3UTR", dest="utrFile",
+                        help="absolute path to 3'UTR fastA file")
 
-parser.add_argument("-t", "--split", dest="splitType",
-                    help="how to split the unifiedFile")
+    parser.add_argument("-t", "--split", dest="splitType",
+                        help="how to split the unifiedFile")
 
-parser.add_argument("-j", "--jarLoc", dest="jarFileLocation",
-                    help="absolute path to the miRAW.jar file")
+    parser.add_argument("-j", "--jarLoc", dest="jarFileLocation",
+                        help="absolute path to the miRAW.jar file")
 
-parser.add_argument("-H", "--HelpMe", action="store_true",
-                    help="print detailed help")
+    parser.add_argument("-H", "--HelpMe", action="store_true",
+                        help="print detailed help")
 
-parser.add_argument("-W", "--maximum_site_length", dest="maximumSiteLength",
-                    help="maximum nucleotide length of a 3'UTR target")
+    parser.add_argument("-W", "--maximum_site_length", dest="maximumSiteLength",
+                        help="maximum nucleotide length of a 3'UTR target")
 
-parser.add_argument("-S", "--seed_alignment_offset", dest="seedAlignmentOffset",
-                    help="stepwise distance for sliding target window along 3'UTR")
+    parser.add_argument("-S", "--seed_alignment_offset", dest="seedAlignmentOffset",
+                        help="stepwise distance for sliding target window along 3'UTR")
 
-parser.add_argument("-E", "--energy_filtering", action="store_true",
-                    help="perform energy filtering on results")
+    parser.add_argument("-E", "--energy_filtering", action="store_true",
+                        help="perform energy filtering on results")
 
-args = parser.parse_args()
-
+    args = parser.parse_args()
+    return args
 
 def printLongHelpAndExit():
     logging.info("")
@@ -105,6 +109,9 @@ def printLongHelpAndExit():
     logging.info("+        (result files will also have this name)                               +")
     logging.info("+      an OutputFolder to write results:           (-o/--outFolder)            +")
     logging.info("+        (this can be a new or existing folder)                                +")
+    logging.info("+      a remoteFolder where the shell script:      (-r/--remoteFolder)         +")
+    logging.info("+        this can be set to outFolder if the script                            +")
+    logging.info("+        will be run we run on the same computer                               +")
     logging.info("+      a DeepLearning model:                       (-d/--dlModel)              +")
     logging.info("+        (unless you want to build your own, use one of ours)                  +")
     logging.info("+        (see the README.md on how to build your own model)                    +")
@@ -171,13 +178,14 @@ def printLongHelpAndExit():
 
 
 def printHelpAndExit():
+    global parser
     parser.print_help()
     logging.info("stopping")
     sys.exit()
 
 
 
-def checkProgramLocation():
+def checkProgramLocation(args):
     #java -jar miRAW.jar GenePrediction predict ./Results/firstTry/firstTry.EF.properties
     logging.info(args.unifiedFile)
     logging.info(args.jarFileLocation)
@@ -191,7 +199,7 @@ def checkProgramLocation():
     logging.info("program location is at <" + jarLocation + ">")
 
 
-def checkExptName():
+def checkExptName(args):
 
     logging.info("checking Experimental Name:" )
     # get working folder
@@ -205,7 +213,7 @@ def checkExptName():
 
 
 
-def checkOutFolder():
+def checkOutFolder(args):
 
     logging.info("checking outFolder:")
     scriptFolder = os.path.dirname(os.path.abspath(__file__))
@@ -233,12 +241,21 @@ def checkOutFolder():
         logging.error("----you need to specify an output folder using the -o/--outFolder parameter")
         printHelpAndExit()
 
-    # check folder exists or is creatable
+
+def checkRemoteFolder(args):
+
+    logging.info("checking remoteFolder:")
+    scriptFolder = os.path.dirname(os.path.abspath(__file__))
+
+    if args.remoteFolder:
+        logging.info("--remoteFolder is <" + args.outFolder + ">")
+    else:
+        args.remoteFolder = args.outFolder
+        logging.info("--setting remoteFolder to outFolder <" + args.outFolder + ">")
 
 
 
-
-def checkUnifiedFile():
+def checkUnifiedFile(args):
     # either the file exists, or we have to build it
     # if both the -m and -3 options are specified, we build a new one
     global buildUnifiedFile
@@ -276,7 +293,7 @@ def checkUnifiedFile():
 
 
 
-def checkCSSM():
+def checkCSSM(args):
     logging.info("checking CSSM:")
 
     if args.cssm:
@@ -320,7 +337,7 @@ def checkCSSM():
 
 
 
-def checkDLModel():
+def checkDLModel(args):
     logging.info("checking DLModel:")
     if args.dlModel:
         logging.info(args.dlModel)
@@ -338,7 +355,7 @@ def checkDLModel():
 
 
 
-def checkSplit():
+def checkSplit(args):
     logging.info("checking split:")
     if args.splitType:
         logging.info(args.splitType)
@@ -373,7 +390,7 @@ def checkSplit():
     logging.info("--OK")
 
 
-def checkEnergyFiltering():
+def checkEnergyFiltering(args):
     logging.info("EnergyFiltering")
     global filterByAccessibilityEnergy
     if args.energy_filtering:
@@ -385,7 +402,7 @@ def checkEnergyFiltering():
     logging.info("--OK")
 
 
-def checkWindowSize():
+def checkWindowSize(args):
     logging.info("checking MaxSiteLength:")
     global maxSiteLength
     if args.maximumSiteLength:
@@ -400,7 +417,7 @@ def checkWindowSize():
 
 
 
-def checkStepSize():
+def checkStepSize(args):
     logging.info("checking seedAlignmentOffset:")
     global seedAlignmentOffset
     if args.seedAlignmentOffset:
@@ -415,26 +432,27 @@ def checkStepSize():
 
 
 
-def checkArgs():
+def checkArgs(args):
 
     if args.HelpMe :
         printLongHelpAndExit()
         exit()
 
-    checkProgramLocation()
-    checkExptName()
-    checkOutFolder()
-    checkUnifiedFile()
-    checkCSSM()
-    checkDLModel()
-    checkSplit()
-    checkEnergyFiltering()
-    checkWindowSize()
-    checkStepSize()
+    checkProgramLocation(args)
+    checkExptName(args)
+    checkOutFolder(args)
+    checkRemoteFolder(args)
+    checkUnifiedFile(args)
+    checkCSSM(args)
+    checkDLModel(args)
+    checkSplit(args)
+    checkEnergyFiltering(args)
+    checkWindowSize(args)
+    checkStepSize(args)
 
 
 
-def readMiRNAFile():
+def readMiRNAFile(args):
 
     inFile = open(args.miRFile,'r')
     for record in SeqIO.parse(inFile,'fasta'):
@@ -442,7 +460,7 @@ def readMiRNAFile():
         miRseqList.append(str(record.seq))
 
 
-def readUTRFile():
+def readUTRFile(args):
     inFile = open(args.utrFile,'r')
     for record in SeqIO.parse(inFile,'fasta'):
         UTRheaderList.append(record.id)
@@ -451,12 +469,12 @@ def readUTRFile():
 
 
 # Single Unified file: miRNAs are in the outer loop
-def writeUnifiedFileBymiRNA():
+def writeUnifiedFileBymiRNA(args):
     #
     logging.info("writeUnifiedFileBymiRNA")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
     writePropertiesFileForFeature("byMiRs")
-    featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "byMiRs" + '.unifiedFile.csv' )
+    featuresFile = os.path.join(args.remoteFolder, args.exptName  + "." + "byMiRs" + '.unifiedFile.csv' )
     with open(featuresFile, "w") as f:
         f.write(headerLine)
         m = 0
@@ -480,7 +498,7 @@ def writeUnifiedFileBymiRNA():
 
 
 # Single Unified File: UTRs are in the outer loop
-def writeUnifiedFileByUTR():
+def writeUnifiedFileByUTROld(args):
     #
     logging.info("writeUnifiedFileByUTR")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
@@ -492,6 +510,8 @@ def writeUnifiedFileByUTR():
             logging.info("--<" + uHeader + ">")
             featuresFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader + '.unifiedFile.csv' )
             propertiesFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader + '.properties' )
+            remoteFeaturesFile = os.path.join(args.remoteFolder, args.exptName  + "." + uHeader + '.unifiedFile.csv' )
+            remotePropertiesFile = os.path.join(args.remoteFolder, args.exptName  + "." + uHeader + '.properties' )
             with open(os.path.join(args.outFolder, featuresFile), 'w') as f:
                 f.write(headerLine)
                 m = 0
@@ -499,7 +519,7 @@ def writeUnifiedFileByUTR():
                     f.write('\t'.join([mHeader, uHeader, uHeader, "?", miRseqList[m], UTRseqList[u]]) + MY_NEWLINE)
                     m+=1
             writePropertiesFileForFeature(uHeader)
-            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + propertiesFile + MY_NEWLINE)
+            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + remotePropertiesFile + MY_NEWLINE)
             u+=1
 
 
@@ -507,11 +527,11 @@ def writeUnifiedFileByUTR():
 
     logging.info("done")
 
-def writeUnifiedFileByUTROld():
+def writeUnifiedFileByUTR(args):
     #
     logging.info("writeUnifiedFileByUTR")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
-    featuresFile = os.path.join(args.outFolder, args.exptName  + "." + "by3pUTRs" + '.unifiedFile.csv' )
+    featuresFile = os.path.join(args.remoteFolder, args.exptName  + "." + "by3pUTRs" + '.unifiedFile.csv' )
     with open(featuresFile, "w") as f:
         f.write(headerLine)
         u = 0
@@ -534,7 +554,7 @@ def writeUnifiedFileByUTROld():
 # we write one file per miRNA
 # need to create a new .properties file for each miRNA as the unifiedFile name is stored in here
 #
-def splitUnifiedFileBymiRNA():
+def splitUnifiedFileBymiRNA(args):
     #
     logging.info("splitUnifiedFileBymiRNA")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
@@ -544,16 +564,17 @@ def splitUnifiedFileBymiRNA():
             logging.info("--<" + mHeader + ">")
             #os.path.join(args.outFolder, args.exptName  + '.sh'), "w"
             featuresFile = os.path.join(args.outFolder, args.exptName  + "." + mHeader + '.unifiedFile.csv' )
+            remotePropertiesFile = os.path.join(args.remoteFolder, args.exptName  + "." + uHeader + '.properties' )
             propertiesFile = os.path.join(args.outFolder, args.exptName  + "." + mHeader + '.properties' )
-            with open(os.path.join(args.outFolder, featuresFile), 'w') as f:
+            with open(featuresFile, 'w') as f:
                 f.write(headerLine)
                 u = 0
                 for uHeader in UTRheaderList:
                     f.write('\t'.join([mHeader, uHeader, uHeader, "?", miRseqList[m], UTRseqList[u]]) + MY_NEWLINE)
                     u+=1
 
-            writePropertiesFileForFeature(mHeader)
-            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + propertiesFile + MY_NEWLINE)
+            writePropertiesFileForFeature(mHeader.replace("|", "_"), args)
+            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + remotePropertiesFile + MY_NEWLINE)
             m+=1
     #java -jar miRAW.jar GenePrediction predict ./Results/firstTry/firstTry.EF.properties
 
@@ -562,7 +583,7 @@ def splitUnifiedFileBymiRNA():
 
 
 # UTRs are in the outer loop
-def splitUnifiedFileByUTR():
+def splitUnifiedFileByUTR(args):
     #
     logging.info("splitUnifiedFileByUTR")
     headerLine = "miRNA\tgene_name\tEnsemblId\tPositive_Negative\tMature_mirna_transcript\t3UTR_transcript" + MY_NEWLINE
@@ -571,18 +592,18 @@ def splitUnifiedFileByUTR():
         logging.info("")
         for uHeader in UTRheaderList:
             logging.info("--<" + uHeader + ">")
-            featuresFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader.replace("|", "_") + '.unifiedFile.csv' )
-            propertiesFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader.replace("|", "_") + '.properties' )
-            with open(os.path.join(args.outFolder, featuresFile), 'w') as f:
+            localFeaturesFile = os.path.join(args.outFolder, args.exptName  + "." + uHeader.replace("|", "_") + '.unifiedFile.csv' )
+            remotePropertiesFile = os.path.join(args.remoteFolder, args.exptName  + "." + uHeader.replace("|", "_") + '.properties' )
+            with open(localFeaturesFile, 'w') as f:
                 m = 0
                 f.write(headerLine)
                 for mHeader in miRheaderList:
                     f.write('\t'.join([mHeader, uHeader, uHeader, "?", miRseqList[m], UTRseqList[u]]) + MY_NEWLINE)
                     m+=1
 
-            writePropertiesFileForFeature(uHeader.replace("|", "_"))
+            writePropertiesFileForFeature(uHeader.replace("|", "_"), args)
 
-            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + propertiesFile + MY_NEWLINE)
+            fSh.write("java -jar " + jarLocation + " GenePrediction predict " + remotePropertiesFile + MY_NEWLINE)
             u+=1
 
 
@@ -599,7 +620,7 @@ def splitUnifiedFileByUTR():
 # UnifiedFile=./miRAWFile/unified.csv
 # DLModel=./miRAWFile/PredModels/newModel.bin
 # CandidateSiteFinder.Type=Personalized;10;1;7 <=This can be personalized to anything we want.
-def writePropertiesFile():
+def writePropertiesFile(args):
 
     # if the UnifiedFile contains a complete file path, we leave it alone
     # if it is just a filename, we append a folder name
@@ -610,7 +631,7 @@ def writePropertiesFile():
     if args.unifiedFile:
         unifiedFilePath = args.unifiedFile
     else:
-        unifiedFilePath = os.path.join(args.outFolder, args.exptName)
+        unifiedFilePath = os.path.join(args.remoteFolder, args.exptName)
 
     with open(os.path.join(args.outFolder, args.exptName  + '.properties'), "w") as f:
         f.write("########################################" + MY_NEWLINE)
@@ -621,7 +642,7 @@ def writePropertiesFile():
         f.write("#                                      #" + MY_NEWLINE)
         f.write("########################################" + MY_NEWLINE)
         f.write("ExperimentName="+ args.exptName + MY_NEWLINE)
-        f.write("ExperimentFolder=" + args.outFolder + MY_NEWLINE)
+        f.write("ExperimentFolder=" + args.remoteFolder + MY_NEWLINE)
         f.write("UnifiedFile=" + unifiedFilePath + MY_NEWLINE)
         f.write("DLModel=" + args.dlModel + MY_NEWLINE)
         f.write("CandidateSiteFinder.Type=" + args.cssm + MY_NEWLINE)
@@ -631,9 +652,9 @@ def writePropertiesFile():
             f.write(FILTER_ACCESSIBILITY_ENERGY_STRING + MY_NEWLINE)
 
 
-def writePropertiesFileForFeature(featureName):
+def writePropertiesFileForFeature(featureName, args):
 
-    unifiedFilePath = os.path.join(args.outFolder, args.exptName  + "." + featureName + ".unifiedFile.csv")
+    unifiedFilePath = os.path.join(args.remoteFolder, args.exptName  + "." + featureName + ".unifiedFile.csv")
 
 
 
@@ -646,7 +667,7 @@ def writePropertiesFileForFeature(featureName):
         f.write("#                                      #" + MY_NEWLINE)
         f.write("########################################" + MY_NEWLINE)
         f.write("ExperimentName="+ args.exptName + "." + featureName + MY_NEWLINE)
-        f.write("ExperimentFolder=" + args.outFolder + MY_NEWLINE)
+        f.write("ExperimentFolder=" + args.remoteFolder + MY_NEWLINE)
         f.write("UnifiedFile=" + unifiedFilePath + MY_NEWLINE)
         f.write("DLModel=" + args.dlModel + MY_NEWLINE)
         f.write("CandidateSiteFinder.Type=" + args.cssm + MY_NEWLINE)
@@ -658,15 +679,15 @@ def writePropertiesFileForFeature(featureName):
 
 
 
-def processAndBuild():
+def processAndBuild(args):
     if int(args.splitType)==UNIFIEDFILE_EXISTS:
-        useExistingUnifiedFile()
+        useExistingUnifiedFile(args)
     else:
-        buildNewUnifiedFile()
+        buildNewUnifiedFile(args)
 
 
 
-def useExistingUnifiedFile():
+def useExistingUnifiedFile(args):
 
     # build properties file
     # write script file
@@ -674,14 +695,14 @@ def useExistingUnifiedFile():
     #java -jar miRAW.jar GenePrediction predict ./Results/firstTry/firstTry.EF.properties
     with open(os.path.join(args.outFolder, args.exptName  + '.sh'), "w") as f:
         f.write("java -jar " + jarLocation + " GenePrediction predict "
-                + os.path.join(args.outFolder, args.exptName  + '.properties') + MY_NEWLINE)
+                + os.path.join(args.remoteFolder, args.exptName  + '.properties') + MY_NEWLINE)
 
 
 
 
-def buildNewUnifiedFile():
-    readMiRNAFile()
-    readUTRFile()
+def buildNewUnifiedFile(args):
+    readMiRNAFile(args)
+    readUTRFile(args)
 
     if int(args.splitType) == UNIFIEDFILE_EXISTS:
         #writePropertiesFile()
@@ -694,18 +715,18 @@ def buildNewUnifiedFile():
         return()
 
     if int(args.splitType) == WRITE_BY_UTR:
-        writePropertiesFile()
-        writeUnifiedFileByUTR()
+        writePropertiesFile(args)
+        writeUnifiedFileByUTR(args)
         return()
 
     if int(args.splitType) == SPLIT_BY_MIRNA:
-        splitUnifiedFileBymiRNA()
+        splitUnifiedFileBymiRNA(args)
         return()
 
     if int(args.splitType) == SPLIT_BY_UTR:
-        splitUnifiedFileByUTR()
+        splitUnifiedFileByUTR(args)
         return()
 
-
-checkArgs()
-processAndBuild()
+args= parseArgs()
+checkArgs(args)
+processAndBuild(args)
